@@ -1,0 +1,123 @@
+CRIAÇÃO DA REDE DOCKER
+
+docker network create solidar-net
+
+=======================================
+
+Acessar direto (mais simples) de dentro do WSL:
+cd "/mnt/c/Users/pedro/Desktop/Global Solution - 2025/JAVA ADVANCED/solidar-api/solidar-api"
+
+1. 🔐 Login no Oracle Container Registry
+
+docker login container-registry.oracle.com
+# OU automatizado
+echo "S4LJfefE5w~+J+*" | docker login container-registry.oracle.com --username pedro.antonieti@gmail.com --password-stdin
+
+===============================
+
+2. 📦 Baixar imagem do Oracle XE
+docker pull container-registry.oracle.com/database/express:latest
+
+OBS: docker images
+===============================
+
+3. 💾 Criar volume nomeado para persistência
+docker volume create oracledb-data
+
+OBS: docker volume ls
+===============================
+
+4. 🚀 Subir container do banco Oracle XE
+docker run -d --name oracle-xe --network solidar-net -p 1521:1521 -p 5500:5500 -v oracledb-data:/opt/oracle/oradata -e ORACLE_PWD=@pedroH1971 container-registry.oracle.com/database/express:latest
+
+OBS: docker ps
+===============================
+
+5. 📜 Acessar logs do Oracle para ver status
+docker logs -f oracle-xe
+
+===============================
+
+Abrir o SQLcL
+system@localhost:1521/XEPDB1
+@pedroH1971
+
+OU
+
+docker exec -it oracle-xe bash
+
+sqlplus system/@pedroH1971@XEPDB1 as sysdba
+
+Realizar os comandos abaixo: 
+
+6. 🧾 Script para preparar o usuário app_user (via SQL Developer ou SQLPlus)
+ALTER SESSION SET CONTAINER = XEPDB1;
+
+DROP USER app_user CASCADE;
+
+CREATE USER app_user IDENTIFIED BY pedroH1971
+  DEFAULT TABLESPACE users
+  TEMPORARY TABLESPACE temp
+  QUOTA UNLIMITED ON users;
+
+GRANT CREATE SESSION, CREATE TABLE, CREATE SEQUENCE, CREATE TRIGGER, CREATE PROCEDURE, CREATE VIEW TO app_user;
+
+===================================================================================
+
+Criar o dockerfile com Nano Dockerfile na raiz do projeto e incluir o código abaixo.
+
+Comandos do nano:
+
+nano Dockerfile
+
+☕ Container da Aplicação Java
+app/Dockerfile
+
+# Etapa de build
+FROM maven:3.9-eclipse-temurin-21 AS builder
+WORKDIR /app
+COPY . .
+RUN mvn clean package -DskipTests
+
+# Etapa de execução
+FROM eclipse-temurin:21-jdk
+WORKDIR /app
+COPY --from=builder /app/target/*.jar app.jar
+ENV JAVA_OPTS=""
+EXPOSE 8080
+ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]
+
+
+Na raiz, acessar nano .env e colocar o código abaixo:
+
+nano .env
+
+SPRING_DATASOURCE_URL=jdbc:oracle:thin:@//localhost:1521/XEPDB1
+SPRING_DATASOURCE_USERNAME=app_user
+SPRING_DATASOURCE_PASSWORD=pedroH1971
+SPRING_DATASOURCE_DRIVER=oracle.jdbc.OracleDriver
+
+============================================================================
+
+Build estando em 
+cd "/mnt/c/Users/pedro/Desktop/Global Solution - 2025/JAVA ADVANCED/solidar-api/solidar-api"
+
+docker build -t solidar-api .
+
+docker run -d --name solidar-api \
+  --network solidar-net \
+  -p 8080:8080 \
+  -e SPRING_DATASOURCE_URL=jdbc:oracle:thin:@oracle-xe:1521/XEPDB1 \
+  -e SPRING_DATASOURCE_USERNAME=app_user \
+  -e SPRING_DATASOURCE_PASSWORD=pedroH1971 \
+  -e SPRING_DATASOURCE_DRIVER=oracle.jdbc.OracleDriver \
+  solidar-api
+
+docker logs -f solidar-api
+
+docker network inspect solidar-net
+
+
+
+
+
